@@ -247,8 +247,8 @@ function App() {
     <div className="App">
     <APIProvider
                 version={'alpha'}
-                apiKey={'AIzaSyCYTvt7YMcKjSNTnBa42djlndCeDvZHkr0'}
-                solutionChannel={"gmp_aistudio_itineraryapplet_v1.0.0"}>  
+                apiKey={API_KEY}
+                solutionChannel={"gmp_aistudio_itineraryapplet_v1.0.0"}>
       <AppComponent />
     </APIProvider>
 
