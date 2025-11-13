@@ -30,12 +30,15 @@ import { Map3D, Map3DCameraProps} from './components/map-3d';
 import { useMapStore } from './lib/state';
 import { MapController } from './lib/map-controller';
 
-const API_KEY = process.env.API_KEY as string;
-if (typeof API_KEY !== 'string') {
-  throw new Error(
-    'Missing required environment variable: API_KEY'
-  );
-}
+// Resolve API key from multiple possible places so the app is resilient in dev
+// and build environments. Vite may replace `process.env.API_KEY` at build-time
+// via `define` in `vite.config.ts`, while runtime values live on
+// `import.meta.env`. We try both and also fallback to a VITE_ prefixed var.
+const API_KEY =
+  ((typeof process !== 'undefined' && (process.env as any)?.API_KEY) as string) ||
+  ((import.meta as any).env?.GEMINI_API_KEY as string) ||
+  ((import.meta as any).env?.VITE_GOOGLE_API_KEY as string) ||
+  undefined;
 
 const INITIAL_VIEW_PROPS = {
   center: {
@@ -243,14 +246,28 @@ function AppComponent() {
  * Manages video streaming state and provides controls for webcam/screen capture.
  */
 function App() {
+  // If API key isn't available, render a helpful message instead of throwing
+  if (!API_KEY) {
+    return (
+      <div className="App" style={{ padding: 24 }}>
+        <h2>Missing API key</h2>
+        <p>
+          The application requires a Google API key to run. Set <code>GEMINI_API_KEY</code>
+          in the project root <code>.env</code> (or VITE_GOOGLE_API_KEY) and restart the dev server.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="App">
-    <APIProvider
-                version={'alpha'}
-                apiKey={API_KEY}
-                solutionChannel={"gmp_aistudio_itineraryapplet_v1.0.0"}>
-      <AppComponent />
-    </APIProvider>
+      <APIProvider
+        version={'alpha'}
+        apiKey={API_KEY}
+        solutionChannel={"gmp_aistudio_itineraryapplet_v1.0.0"}
+      >
+        <AppComponent />
+      </APIProvider>
 
     </div>
   );
