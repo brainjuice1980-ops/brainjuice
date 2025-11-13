@@ -30,40 +30,35 @@ import { Map3D, Map3DCameraProps} from './components/map-3d';
 import { useMapStore } from './lib/state';
 import { MapController } from './lib/map-controller';
 
-// Resolve API key from multiple possible places so the app is resilient in dev
-// and build environments. Vite may replace `process.env.API_KEY` at build-time
-// via `define` in `vite.config.ts`, while runtime values live on
-// `import.meta.env`. We try both and also fallback to a VITE_ prefixed var.
-const API_KEY =
-  ((typeof process !== 'undefined' && (process.env as any)?.API_KEY) as string) ||
-  ((import.meta as any).env?.GEMINI_API_KEY as string) ||
-  ((import.meta as any).env?.VITE_GOOGLE_API_KEY as string) ||
-  undefined;
+const GEMINI_API_KEY = process.env.API_KEY as string;
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY as string;
+
+if (typeof GEMINI_API_KEY !== 'string' || !GEMINI_API_KEY) {
+  throw new Error('Missing GEMINI_API_KEY in .env file');
+}
+
+if (typeof GOOGLE_MAPS_API_KEY !== 'string' || !GOOGLE_MAPS_API_KEY) {
+  throw new Error('Missing VITE_GOOGLE_API_KEY in .env file');
+}
 
 const INITIAL_VIEW_PROPS = {
   center: {
-    lat: 25.12, // Centered on Dubai
+    lat: 25.12,
     lng: 55.22,
     altitude: 1000
   },
-  range: 35000, // Zoomed out to see major communities
+  range: 35000,
   heading: 0,
   tilt: 30,
   roll: 0
 };
 
-/**
- * The main application component. It serves as the primary view controller,
- * orchestrating the layout of UI components and reacting to global state changes
- * to update the 3D map.
- */
 function AppComponent() {
   const [map, setMap] = useState<google.maps.maps3d.Map3DElement | null>(null);
   const placesLib = useMapsLibrary('places');
   const geocodingLib = useMapsLibrary('geocoding');
   const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
   const [viewProps, setViewProps] = useState(INITIAL_VIEW_PROPS);
-  // Subscribe to marker and camera state from the global Zustand store.
   const { markers, cameraTarget, setCameraTarget, preventAutoFrame } = useMapStore();
   const mapController = useRef<MapController | null>(null);
 
@@ -74,19 +69,14 @@ function AppComponent() {
 
   const consolePanelRef = useRef<HTMLDivElement>(null);
   const controlTrayRef = useRef<HTMLElement>(null);
-  // Padding state is used to ensure map content isn't hidden by UI elements.
   const [padding, setPadding] = useState<[number, number, number, number]>([0.05, 0.05, 0.05, 0.05]);
 
-  // Effect: Instantiate the Geocoder once the library is loaded.
   useEffect(() => {
     if (geocodingLib) {
       setGeocoder(new geocodingLib.Geocoder());
     }
   }, [geocodingLib]);
 
-  // Effect: Instantiate the MapController.
-  // This runs once all necessary map libraries and the map element itself are
-  // loaded and available, creating a centralized controller for all map interactions.
   useEffect(() => {
     if (map && maps3dLib && elevationLib) {
       mapController.current = new MapController({
@@ -95,17 +85,11 @@ function AppComponent() {
         elevationLib,
       });
     }
-    // Invalidate the controller if its dependencies change.
     return () => {
       mapController.current = null;
     };
   }, [map, maps3dLib, elevationLib]);
 
-  // Effect: Calculate responsive padding.
-  // This effect observes the size of the console and control tray to calculate
-  // padding values. These values represent how much of the viewport is
-  // covered by UI, ensuring that when the map frames content, nothing is hidden.
-  // See `lib/look-at.ts` for how this padding is used.
   useEffect(() => {
     const calculatePadding = () => {
       const consoleEl = consolePanelRef.current;
@@ -123,23 +107,18 @@ function AppComponent() {
       let left = 0.05;
 
       if (!isMobile) {
-          // On desktop, console is on the left. The tray is now inside it.
-          left = Math.max(left, (consoleEl.offsetWidth / vw) + 0.02); // add 2% buffer
-          // The tray no longer covers the bottom of the map on desktop.
+          left = Math.max(left, (consoleEl.offsetWidth / vw) + 0.02);
       }
       
       setPadding([top, right, bottom, left]);
     };
 
-    // Use ResizeObserver for more reliable updates on the elements themselves.
     const observer = new ResizeObserver(calculatePadding);
     if (consolePanelRef.current) observer.observe(consolePanelRef.current);
     if (controlTrayRef.current) observer.observe(controlTrayRef.current);
 
-    // Also listen to window resize
     window.addEventListener('resize', calculatePadding);
 
-    // Initial calculation after a short delay to ensure layout is stable
     const timeoutId = setTimeout(calculatePadding, 100);
 
     return () => {
@@ -164,13 +143,6 @@ function AppComponent() {
     }
   }, [map]);
 
-
-  // Effect: Reactively render markers and routes on the map.
-  // This is the core of the component's "reactive" nature. It listens for
-  // changes to the `markers` array in the global Zustand store.
-  // Whenever a tool updates this state, this effect triggers, commanding the
-  // MapController to clear the map, add the new entities, and then
-  // intelligently frame them all in the camera's view, respecting UI padding.
   useEffect(() => {
     if (!mapController.current) return;
 
@@ -181,31 +153,21 @@ function AppComponent() {
       controller.addMarkers(markers);
     }
     
-    // Combine all points from markers for framing
     const markerPositions = markers.map(m => m.position);
     const allEntities = [...markerPositions].map(p => ({ position: p }));
 
     if (allEntities.length > 0 && !preventAutoFrame) {
       controller.frameEntities(allEntities, padding);
     }
-  }, [markers, padding, preventAutoFrame]); // Re-run when markers or padding change
+  }, [markers, padding, preventAutoFrame]);
 
-
-  // Effect: Reactively handle direct camera movement requests.
-  // This effect listens for changes to `cameraTarget`. Tools can set this state
-  // to request a direct camera flight to a specific location or view. Once the
-  // flight is initiated, the target is cleared to prevent re-triggering.
   useEffect(() => {
     if (cameraTarget && mapController.current) {
       mapController.current.flyTo(cameraTarget);
-      // Reset the target so it doesn't re-trigger on re-renders
       setCameraTarget(null);
-      // After a direct camera flight, reset the auto-frame prevention flag
-      // to ensure subsequent marker updates behave as expected.
       useMapStore.getState().setPreventAutoFrame(false);
     }
   }, [cameraTarget, setCameraTarget]);
-
 
   const handleCameraChange = useCallback((props: Map3DCameraProps) => {
       setViewProps(oldProps => ({...oldProps, ...props}));
@@ -213,7 +175,7 @@ function AppComponent() {
 
   return (
     <LiveAPIProvider 
-      apiKey={API_KEY} 
+      apiKey={GEMINI_API_KEY} 
       map={map} 
       placesLib={placesLib}
       elevationLib={elevationLib}
@@ -240,35 +202,15 @@ function AppComponent() {
   );
 }
 
-
-/**
- * Main application component that provides a streaming interface for Live API.
- * Manages video streaming state and provides controls for webcam/screen capture.
- */
 function App() {
-  // If API key isn't available, render a helpful message instead of throwing
-  if (!API_KEY) {
-    return (
-      <div className="App" style={{ padding: 24 }}>
-        <h2>Missing API key</h2>
-        <p>
-          The application requires a Google API key to run. Set <code>GEMINI_API_KEY</code>
-          in the project root <code>.env</code> (or VITE_GOOGLE_API_KEY) and restart the dev server.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="App">
       <APIProvider
         version={'alpha'}
-        apiKey={API_KEY}
-        solutionChannel={"gmp_aistudio_itineraryapplet_v1.0.0"}
-      >
+        apiKey={GOOGLE_MAPS_API_KEY}
+        solutionChannel={"gmp_aistudio_itineraryapplet_v1.0.0"}>  
         <AppComponent />
       </APIProvider>
-
     </div>
   );
 }

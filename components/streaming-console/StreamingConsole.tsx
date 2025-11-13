@@ -2,9 +2,8 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-// import WelcomeScreen from '../welcome-screen/WelcomeScreen';
-import { LiveConnectConfig, Modality, LiveServerContent } from '@google/genai';
+import React, { useEffect, useRef, useState } from 'react';
+import { Modality, LiveServerContent } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -19,7 +18,8 @@ import {
 import { SourcesPopover } from '../sources-popover/sources-popover';
 import { GroundingWidget } from '../GroundingWidget';
 
-const formatTimestamp = (date: Date) => {
+const formatTimestamp = (timestamp: number) => {
+  const date = new Date(timestamp);
   const pad = (num: number, size = 2) => num.toString().padStart(size, '0');
   const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
@@ -28,7 +28,6 @@ const formatTimestamp = (date: Date) => {
   return `${hours}:${minutes}:${seconds}.${milliseconds}`;
 };
 
-// Hook to detect screen size for responsive component rendering
 const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
 
@@ -71,7 +70,6 @@ export default function StreamingConsole() {
     ? turns
     : turns.filter(turn => turn.role !== 'system');
 
-  // Set the configuration for the Live API
   useEffect(() => {
     const enabledTools = tools
       .filter(tool => tool.isEnabled)
@@ -84,8 +82,7 @@ export default function StreamingConsole() {
           },
         ],
       }));
-    // Using `any` for config to accommodate `speechConfig`, which is not in the
-    // current TS definitions but is used in the working reference example.
+
     const config: any = {
       responseModalities: [Modality.AUDIO],
       speechConfig: {
@@ -269,13 +266,11 @@ export default function StreamingConsole() {
 
   useEffect(() => {
     if (scrollRef.current) {
-      // The widget has a 300ms transition for max-height. We need to wait
-      // for that transition to finish before we can accurately scroll to the bottom.
       const scrollTimeout = setTimeout(() => {
         if (scrollRef.current) {
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-      }, 350); // A little longer than the transition duration
+      }, 350);
 
       return () => clearTimeout(scrollTimeout);
     }
@@ -291,7 +286,7 @@ export default function StreamingConsole() {
             if (t.role === 'system') {
               return (
                 <div
-                  key={t.timestamp.toISOString()}
+                  key={t.timestamp}
                   className={`transcription-entry system`}
                 >
                   <div className="transcription-header">
@@ -328,7 +323,6 @@ export default function StreamingConsole() {
 
               if (t.groundingChunks.length === 1) {
                 const chunk = t.groundingChunks[0];
-                // The type for `placeAnswerSources` might be missing or incomplete. Use `any` for safety.
                 const placeAnswerSources = (chunk.maps as any)?.placeAnswerSources;
                 if (
                   placeAnswerSources &&
@@ -354,9 +348,8 @@ export default function StreamingConsole() {
 
             return (
               <div
-                key={t.timestamp.toISOString()}
-                className={`transcription-entry ${t.role} ${!t.isFinal ? 'interim' : ''
-                  }`}
+                key={t.timestamp}
+                className={`transcription-entry ${t.role} ${!t.isFinal ? 'interim' : ''}`}
               >
                 <div className="avatar">
                   <span className="icon">{t.role === 'user' ? 'person' : 'auto_awesome'}</span>

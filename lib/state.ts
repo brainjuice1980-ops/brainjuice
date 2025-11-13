@@ -14,12 +14,14 @@ const toolsets: Record<Template, FunctionCall[]> = {
 import {
   SYSTEM_INSTRUCTIONS,
   SCAVENGER_HUNT_PROMPT,
-} from './constants.ts';
+  DEFAULT_LIVE_API_MODEL,
+  DEFAULT_VOICE,
+} from './constants';
+
 const systemPrompts: Record<Template, string> = {
   'itinerary-planner': SYSTEM_INSTRUCTIONS,
 };
 
-import { DEFAULT_LIVE_API_MODEL, DEFAULT_VOICE } from './constants';
 import {
   GenerateContentResponse,
   FunctionResponse,
@@ -83,7 +85,7 @@ export const useSettings = create<{
           activePersona: persona,
           systemPrompt: personas[persona].prompt,
           voice: personas[persona].voice,
-          model: 'gemini-live-2.5-flash-preview', // gemini-2.5-flash-preview-native-audio-dialog
+          model: 'gemini-live-2.5-flash-preview',
         };
       }
       return {};
@@ -118,35 +120,33 @@ export interface FunctionCall {
   scheduling?: FunctionResponseScheduling;
 }
 
-
-
 export const useTools = create<{
   tools: FunctionCall[];
   template: Template;
   setTemplate: (template: Template) => void;
+  toggleTool: (toolName: string) => void;
 }>(set => ({
-  tools: itineraryPlannerTools,
   template: 'itinerary-planner',
-  setTemplate: (template: Template) => {
-    set({ tools: toolsets[template], template });
-    useSettings.getState().setSystemPrompt(systemPrompts[template]);
+  tools: toolsets['itinerary-planner'],
+  setTemplate: template => {
+    set({ template, tools: toolsets[template] });
   },
+  toggleTool: (toolName: string) =>
+    set(state => ({
+      tools: state.tools.map(tool =>
+        tool.name === toolName ? { ...tool, isEnabled: !tool.isEnabled } : tool,
+      ),
+    })),
 }));
 
 /**
- * Logs
+ * Log
  */
-export interface LiveClientToolResponse {
-  functionResponses?: FunctionResponse[];
-}
-
 export interface ConversationTurn {
-  timestamp: Date;
   role: 'user' | 'agent' | 'system';
   text: string;
+  timestamp: number;
   isFinal: boolean;
-  toolUseRequest?: LiveServerToolCall;
-  toolUseResponse?: LiveClientToolResponse;
   groundingChunks?: GroundingChunk[];
   toolResponse?: GenerateContentResponse;
 }
@@ -155,63 +155,45 @@ export const useLogStore = create<{
   turns: ConversationTurn[];
   isAwaitingFunctionResponse: boolean;
   addTurn: (turn: Omit<ConversationTurn, 'timestamp'>) => void;
-  updateLastTurn: (update: Partial<ConversationTurn>) => void;
-  mergeIntoLastAgentTurn: (
-    update: Omit<ConversationTurn, 'timestamp' | 'role'>,
-  ) => void;
+  updateLastTurn: (updates: Partial<Omit<ConversationTurn, 'timestamp' | 'role'>>) => void;
+  mergeIntoLastAgentTurn: (updates: Partial<Omit<ConversationTurn, 'timestamp' | 'role'>>) => void;
   clearTurns: () => void;
   setIsAwaitingFunctionResponse: (isAwaiting: boolean) => void;
-}>((set, get) => ({
+}>(set => ({
   turns: [],
   isAwaitingFunctionResponse: false,
-  addTurn: (turn: Omit<ConversationTurn, 'timestamp'>) =>
+  addTurn: turn =>
     set(state => ({
-      turns: [...state.turns, { ...turn, timestamp: new Date() }],
+      turns: [...state.turns, { ...turn, timestamp: Date.now() }],
     })),
-  updateLastTurn: (update: Partial<Omit<ConversationTurn, 'timestamp'>>) => {
+  updateLastTurn: updates =>
     set(state => {
-      if (state.turns.length === 0) {
-        return state;
-      }
       const newTurns = [...state.turns];
-      const lastTurn = { ...newTurns[newTurns.length - 1], ...update };
-      newTurns[newTurns.length - 1] = lastTurn;
+      const lastIndex = newTurns.length - 1;
+      if (lastIndex >= 0) {
+        newTurns[lastIndex] = { ...newTurns[lastIndex], ...updates };
+      }
       return { turns: newTurns };
-    });
-  },
-  mergeIntoLastAgentTurn: (
-    update: Omit<ConversationTurn, 'timestamp' | 'role'>,
-  ) => {
+    }),
+  mergeIntoLastAgentTurn: updates => {
     set(state => {
       const turns = state.turns;
       const lastAgentTurnIndex = turns.map(t => t.role).lastIndexOf('agent');
-
+      
       if (lastAgentTurnIndex === -1) {
-        // Fallback: add a new turn.
-        return {
-          turns: [
-            ...turns,
-            { ...update, role: 'agent', timestamp: new Date() } as ConversationTurn,
-          ],
-        };
+        return state;
       }
 
-      const lastAgentTurn = turns[lastAgentTurnIndex];
       const mergedTurn: ConversationTurn = {
-        ...lastAgentTurn,
-        text: lastAgentTurn.text + (update.text || ''),
-        isFinal: update.isFinal,
-        groundingChunks: [
-          ...(lastAgentTurn.groundingChunks || []),
-          ...(update.groundingChunks || []),
-        ],
-        toolResponse: update.toolResponse || lastAgentTurn.toolResponse,
+        ...turns[lastAgentTurnIndex],
+        text: turns[lastAgentTurnIndex].text + (updates.text || ''),
+        isFinal: updates.isFinal ?? turns[lastAgentTurnIndex].isFinal,
+        groundingChunks: updates.groundingChunks || turns[lastAgentTurnIndex].groundingChunks,
+        toolResponse: updates.toolResponse || turns[lastAgentTurnIndex].toolResponse,
       };
 
-      // Rebuild the turns array, replacing the old agent turn.
       const newTurns = [...turns];
       newTurns[lastAgentTurnIndex] = mergedTurn;
-
 
       return { turns: newTurns };
     });

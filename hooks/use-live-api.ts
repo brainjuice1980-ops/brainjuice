@@ -52,7 +52,6 @@ export type UseLiveApiResults = {
  clearHeldGroundingChunks: () => void;
  heldGroundedResponse: GenerateContentResponse | undefined;
  clearHeldGroundedResponse: () => void;
- lastCloseReason?: string;
 };
 
 
@@ -80,7 +79,6 @@ export function useLiveApi({
 
  const [volume, setVolume] = useState(0);
  const [connected, setConnected] = useState(false);
-  const [lastCloseReason, setLastCloseReason] = useState<string | undefined>(undefined);
  const [streamerReady, setStreamerReady] = useState(false);
  const [config, setConfig] = useState<LiveConnectConfig>({});
  const [heldGroundingChunks, setHeldGroundingChunks] = useState<
@@ -129,13 +127,12 @@ export function useLiveApi({
    const onClose = (event: CloseEvent) => {
      setConnected(false);
      stopAudioStreamer();
-    const reason = `Session ended. Press 'Play' to start a new session. code=${event.code} reason=${event.reason}`;
-    setLastCloseReason(reason);
-    useLogStore.getState().addTurn({
-      role: 'agent',
-      text: reason,
-      isFinal: true,
-    });
+     let reason = "Session ended. Press 'Play' to start a new session. "+ event.reason;
+     useLogStore.getState().addTurn({
+         role: 'agent',
+         text: reason,
+         isFinal: true,
+       });
    };
 
 
@@ -168,11 +165,6 @@ export function useLiveApi({
    client.on('open', onOpen);
    client.on('setupcomplete', onSetupComplete);
    client.on('close', onClose);
-  client.on('error', (e: ErrorEvent) => {
-    const msg = `Client error: ${e.message}`;
-    setLastCloseReason(msg);
-    useLogStore.getState().addTurn({ role: 'agent', text: msg, isFinal: true });
-  });
    client.on('interrupted', onInterrupted);
    client.on('audio', onAudio);
    client.on('generationcomplete', onGenerationComplete);
@@ -289,7 +281,6 @@ export function useLiveApi({
      client.off('open', onOpen);
      client.off('setupcomplete', onSetupComplete);
      client.off('close', onClose);
-    client.off('error');
      client.off('interrupted', onInterrupted);
      client.off('audio', onAudio);
      client.off('toolcall', onToolCall);
@@ -327,7 +318,6 @@ export function useLiveApi({
    clearHeldGroundingChunks,
    heldGroundedResponse,
    clearHeldGroundedResponse,
-  lastCloseReason,
    audioStreamer: audioStreamerRef,
  };
 }
