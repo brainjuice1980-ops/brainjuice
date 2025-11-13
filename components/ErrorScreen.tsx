@@ -12,7 +12,7 @@ export interface ExtendedErrorType {
 }
 
 export default function ErrorScreen() {
-  const { client } = useLiveAPIContext();
+  const { client, connect, lastCloseReason } = useLiveAPIContext();
   const [error, setError] = useState<{ message?: string } | null>(null);
 
   useEffect(() => {
@@ -41,6 +41,31 @@ export default function ErrorScreen() {
   }
 
   if (!error) {
+    // If there's no ErrorEvent but we have a close reason from the Live API,
+    // surface it so the user can reconnect.
+    if (lastCloseReason) {
+      return (
+        <div className="error-screen">
+          <div style={{ fontSize: 48 }}>💔</div>
+          <div className="error-message-container" style={{ fontSize: 18, opacity: 0.9 }}>
+            Session disconnected
+          </div>
+          <div style={{ marginTop: 12, fontSize: 13, opacity: 0.6 }}>{lastCloseReason}</div>
+          <div style={{ marginTop: 12 }}>
+            <button
+              className="close-button"
+              onClick={() => {
+                setError(null);
+                connect().catch(e => console.error('Reconnect failed', e));
+              }}
+            >
+              Reconnect
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return <div style={{ display: 'none' }} />;
   }
 

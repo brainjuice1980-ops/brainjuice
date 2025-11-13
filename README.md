@@ -1,5 +1,3 @@
-# Sanjay Karwa base version 12/11/2025
-
 # Introduction
 
 This sample app is for illustration only. It uses both Gemini (including Grounding with Google Maps) and Google Maps Platform services.  It is your responsibility to review the relevant Terms of Service applicable to your region, and you must confirm that your integration will comply with those terms.  This sample app may show products or functionality that are not available in your region under the Terms of Service for that region.
