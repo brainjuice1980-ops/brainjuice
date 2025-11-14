@@ -34,11 +34,11 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY as string;
 
 if (typeof GEMINI_API_KEY !== 'string' || !GEMINI_API_KEY) {
-  console.error('Missing VITE_GEMINI_API_KEY in .env file');
+  throw new Error('Missing GEMINI_API_KEY in .env file');
 }
 
 if (typeof GOOGLE_MAPS_API_KEY !== 'string' || !GOOGLE_MAPS_API_KEY) {
-  console.error('Missing VITE_GOOGLE_API_KEY in .env file');
+  throw new Error('Missing VITE_GOOGLE_API_KEY in .env file');
 }
 
 const INITIAL_VIEW_PROPS = {
